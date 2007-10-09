@@ -3,7 +3,7 @@ require 'test/unit'
 class IPTablesParserTest < Test::Unit::TestCase
 
   def setup
-    system("racc /home/srk/dev/firewallang/ipt.grammar -o /home/srk/dev/firewallang/iptables_parser.rb")
+    system("racc ipt.grammar -o iptables_parser.rb")
 #    puts "Generated....."
     require 'iptables_parser'
   end
@@ -41,16 +41,16 @@ class IPTablesParserTest < Test::Unit::TestCase
     expected = "/sbin/iptables -A INPUT -j ACCEPT -s 192.168.1.1/24"
     assert_equal expected, result
 
-    result = parser.parse "accept incoming connections from 75.40.150.0/255.255.255.0"
-    expected = "/sbin/iptables -A INPUT -j ACCEPT -s 75.40.150.0/255.255.255.0"
+    result = parser.parse "accept incoming connections from 5.4.50.0/255.255.255.0"
+    expected = "/sbin/iptables -A INPUT -j ACCEPT -s 5.4.50.0/255.255.255.0"
     assert_equal expected, result
 
-    result = parser.parse "accept incoming connections from 75.40.150.0/255.255.255.0 in new state"
-    expected = "/sbin/iptables -A INPUT -j ACCEPT -s 75.40.150.0/255.255.255.0 -m state --state NEW"
+    result = parser.parse "accept incoming connections from 7.0.10.40/255.255.255.0 in new state"
+    expected = "/sbin/iptables -A INPUT -j ACCEPT -s 7.0.10.40/255.255.255.0 -m state --state NEW"
     assert_equal expected, result
 
-    result = parser.parse "accept new incoming connections from 75.40.150.0/255.255.255.0"
-    expected = "/sbin/iptables -A INPUT -j ACCEPT -m state --state NEW -s 75.40.150.0/255.255.255.0"
+    result = parser.parse "accept new incoming connections from 5.4.50.0/255.255.255.0"
+    expected = "/sbin/iptables -A INPUT -j ACCEPT -m state --state NEW -s 5.4.50.0/255.255.255.0"
     assert_equal expected, result
   end
 

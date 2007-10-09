@@ -1,10 +1,11 @@
-system("racc /home/srk/dev/ipt/ipt.grammar -o /home/srk/dev/ipt/iptables_parser.rb")
+system("racc ipt.grammar -o iptables_parser.rb")
 
 require 'iptables_parser'
 parser = IPTablesParser.new
 count = 0
 scnt	= 0
 
+puts 'have a look at iptables_parser_test.rb for examples.'
 puts
 puts 'type "Q" to quit.'
 puts
