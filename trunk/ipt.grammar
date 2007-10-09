@@ -1,0 +1,136 @@
+class IPTablesParser
+
+rule
+  target
+  : action IN states STATE                  { result = _state(val[0], val[2]) }
+  | action FROM addresses IN states STATE   { result = _state("#{val[0]} -s #{val[2]}", val[4]) }
+  | action FROM addresses                   { result = "#{val[0]} -s #{val[2]}" }
+  | VARIABLE '=' addresses                  { result = _assign(val[0], val[2])}
+  | action
+  |                                          { result = "hello there! say something!" }
+  ;
+
+  action
+  : ACTION directions CONNECTIONS BY DEFAULT {   result = _default_policy(val[0], val[1]) }
+  | ACTION directions protocols CONNECTIONS  {   result = _protocol(_append(val[0], val[1]), val[2])}
+  | ACTION directions CONNECTIONS            {   result = _append(val[0], val[1])}
+  | ACTION states directions CONNECTIONS     {   result = _state(_append(val[0], val[2]), val[1]) }
+  ;
+
+  directions
+  : DIRECTION                     { result = _addDirection(val[0])}
+  | directions','DIRECTION        { result = _addDirection(val[2])}
+  ;
+
+  protocols
+  :PROTOCOL
+  |                               { result = " all "}
+  ;
+
+  states
+  :A_STATE                          { result = val[0].upcase }
+  ;
+
+  addresses
+  :IP_ADDRESS
+  |VARIABLE                         {result = _dereference(val[0])}
+  ;
+
+end
+
+---- header ----
+require 'strscan'
+---- inner ----
+
+attr_accessor :symbols
+
+def _assign(name, value)
+  @symbols = {} if @symbols.nil?
+  @symbols[name] = value
+end
+
+def _addDirection(dir)
+    @directions = [] if @directions.nil?
+    @directions.push(DIRECTIONSMAP[dir])
+end
+
+def _dereference(name)
+  @symbols[name]  
+end
+
+def _default_policy(a, direction)
+    res = ""
+    action = a.upcase
+    @directions.each do |dir|
+        res += "/sbin/iptables -P #{dir} #{action}\n"
+    end
+    res
+end
+
+def _append(a, direction)
+  "/sbin/iptables -A #{direction} -j #{a.upcase}"
+end
+
+def _state(a, state)
+   "#{a} -m state --state #{state}"
+end
+
+def _protocol(a, proto)
+   "#{a} -p #{proto}"
+end
+
+DIRECTIONSMAP = {"incoming" => "INPUT", "outgoing" => "OUTPUT"}
+def parse( str )
+  tokens = []
+  str = "" if str.nil?
+  scanner = StringScanner.new(str)
+
+  until scanner.empty?
+    case
+    when scanner.scan(/\s+/)
+      # ignore space
+    when m = scanner.scan(/connections/i)
+      tokens.push [:CONNECTIONS, m]
+    when m = scanner.scan(/by/i)
+      tokens.push [:BY, m]
+    when m = scanner.scan(/default/i)
+      tokens.push [:DEFAULT, m]
+    when m = scanner.scan(/state/i)
+      tokens.push [:STATE, m]
+    when m = scanner.scan(/ssh/i)
+      tokens.push   [:TYPE, m]
+    when m = scanner.scan(/from/i)
+      tokens.push   [:FROM, m]
+    when m = scanner.scan(/drop|accept/i)
+      tokens.push   [:ACTION, m]
+    when m = scanner.scan(/incoming|outgoing|forwarded/i)
+      tokens.push   [:DIRECTION, m]
+    when m = scanner.scan(/established|related|new/i)
+      tokens.push   [:A_STATE, m]
+    when m = scanner.scan(/tcp|udmp|icmp/i)
+      tokens.push   [:PROTOCOL, m]
+    when m = scanner.scan(/in/i)
+      tokens.push [:IN, m]
+    when m = scanner.scan(/\d{1,3}\.\d{1,3}\.\d{1,3}.\d{1,3}((\/\d{1,3}\.\d{1,3}\.\d{1,3}.\d{1,3})|(\/\d{1,2}))?/)
+      tokens.push [:IP_ADDRESS, m]
+    when m = scanner.scan(/\[([\w\:\.\/\-\s]+\,\s*)*[\w\:\.\/\-\s]+\]/)
+      tokens.push   [:PARAMS, m]
+    when m = scanner.scan(/\d+(?:\.\d{0,2})?\.\.\d+(?:\.\d{0,2})?/)
+      tokens.push   [:RANGE, m]
+    when m = scanner.scan(/\w+/)
+      tokens.push   [:VARIABLE, m]
+    when m = scanner.scan(/.|\n/)
+      tokens.push   [m, m]
+    end
+  end
+  tokens.push [false, false]
+  @directions = []
+  yyparse(tokens, :each)
+end
+
+def on_error(error_token_id, error_value, value_stack)
+  msg = "parse error "
+  msg << "after #{value_stack.last} " if value_stack.length > 1
+  msg << "on #{token_to_str(error_token_id)}  Stack: #{value_stack.inspect}"
+  raise ParseError, msg
+end
